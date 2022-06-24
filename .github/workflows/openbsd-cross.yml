@@ -1,0 +1,33 @@
+name: OpenBSD (Cross-compiled)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        go-version: [1.17, 1.18]
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ matrix.go-version }}
+      id: go
+
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Run tests
+      env:
+        GOOS: openbsd
+        GOARCH: amd64
+      run : for d in $(go list -f '{{if .TestGoFiles}}{{.Dir}}{{end}}' ./...); do (echo $d; cd $d && go test -c); done
