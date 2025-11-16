@@ -7,4 +7,4 @@ including OpenBSD's [vmm](https://man.openbsd.org/vmm)/[vmd](https://man.openbsd
 [OpenBGPD](https://www.openbgpd.org/), and [tmux](https://github.com/tmux/tmux).
 
 ## Stability
-This package is pre-v1 and as such, currently provides no stability guarantees. Go 1.17 and above are supported.
+This package is pre-v1 and as such, currently provides no stability guarantees. Go 1.24 and above are supported.
