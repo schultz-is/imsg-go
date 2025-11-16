@@ -138,7 +138,7 @@ func TestMarshalBinary(t *testing.T) {
 					var out []byte
 					var err error
 
-					if bo == systemByteOrder {
+					if bo == binary.NativeEndian {
 						out, err = test.in.MarshalBinary()
 					} else {
 						out, err = test.in.MarshalBinaryWithByteOrder(bo)
@@ -255,7 +255,7 @@ func TestUnmarshalBinary(t *testing.T) {
 						in = test.inBE
 					}
 
-					if bo == systemByteOrder {
+					if bo == binary.NativeEndian {
 						err = out.UnmarshalBinary(in)
 					} else {
 						err = out.UnmarshalBinaryWithByteOrder(bo, in)
@@ -378,7 +378,7 @@ func TestEncode(t *testing.T) {
 					var outBuf bytes.Buffer
 					var err error
 
-					if bo == systemByteOrder {
+					if bo == binary.NativeEndian {
 						err = NewEncoder(&outBuf).Encode(test.in)
 					} else {
 						err = NewEncoderWithByteOrder(&outBuf, bo).Encode(test.in)
@@ -522,7 +522,7 @@ func TestDecode(t *testing.T) {
 						inR = bytes.NewReader(test.inBE)
 					}
 
-					if bo == systemByteOrder {
+					if bo == binary.NativeEndian {
 						err = NewDecoder(inR).Decode(&out)
 					} else {
 						err = NewDecoderWithByteOrder(inR, bo).Decode(&out)

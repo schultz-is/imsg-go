@@ -63,7 +63,7 @@ func New(typ, peerID, pid uint32, data []byte) (*IMsg, error) {
 // MarshalBinary implements the encoding.BinaryMarshaler interface. It returns the byte
 // representation of an IMsg in the current system's byte order.
 func (im IMsg) MarshalBinary() ([]byte, error) {
-	return im.MarshalBinaryWithByteOrder(systemByteOrder)
+	return im.MarshalBinaryWithByteOrder(binary.NativeEndian)
 }
 
 // MarshalBinaryWithByteOrder returns the byte representation of an IMsg in the provided byte
@@ -90,7 +90,7 @@ func (im IMsg) MarshalBinaryWithByteOrder(byteOrder binary.ByteOrder) ([]byte, e
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface. It returns an IMsg derived
 // from a byte-formatted imsg in the current system's byte order.
 func (im *IMsg) UnmarshalBinary(b []byte) error {
-	return im.UnmarshalBinaryWithByteOrder(systemByteOrder, b)
+	return im.UnmarshalBinaryWithByteOrder(binary.NativeEndian, b)
 }
 
 // UnmarshalBinaryWithByteOrder returns an IMsg derived from a byte-formatted imsg in the provided
@@ -130,7 +130,7 @@ type Encoder struct {
 // NewEncoder returns a new encoder that writes to the provided io.Writer in the current system's
 // byte order.
 func NewEncoder(w io.Writer) *Encoder {
-	return NewEncoderWithByteOrder(w, systemByteOrder)
+	return NewEncoderWithByteOrder(w, binary.NativeEndian)
 }
 
 // NewEncoderWithByteOrder returns a new encoder that writes to the provided io.Writer in the
@@ -180,7 +180,7 @@ type Decoder struct {
 // NewDecoder returns a new decoder that reads from the provided io.Reader in the current system's
 // byte order.
 func NewDecoder(r io.Reader) *Decoder {
-	return NewDecoderWithByteOrder(r, systemByteOrder)
+	return NewDecoderWithByteOrder(r, binary.NativeEndian)
 }
 
 // NewDecoderWithByteOrder returns a new decoder that reads from the provided io.Reader in the
