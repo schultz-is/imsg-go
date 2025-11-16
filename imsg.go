@@ -8,8 +8,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"sync"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -19,6 +22,8 @@ const (
 	MaxSizeInBytes = 16384
 	// MaxDataSizeInBytes is the maximum allowed size of an imsg's ancillary data in bytes.
 	MaxDataSizeInBytes = MaxSizeInBytes - HeaderSizeInBytes
+	// imsgFDMark is the bit set in the length field when an FD is attached.
+	imsgFDMark = 0x80000000
 )
 
 var (
@@ -33,12 +38,20 @@ type IMsg struct {
 	PeerID uint32 // free for any use; normally used to identify the message sender
 	PID    uint32 // free for any use; normally used to identify the sending process
 	Data   []byte // ancillary data to be transmitted with the imsg
+	FD     int    // file descriptor to pass; -1 indicates no FD
 }
 
 // New will create an IMsg given the provided type, peer ID, PID, and ancillary data. When a PID
 // of 0 is provided, the PID will be replaced with the result of os.Getpid(). If the ancillary data
-// is too large, ErrLength will be returned.
+// is too large, ErrLength will be returned. The FD field is initialized to -1 (no file descriptor).
 func New(typ, peerID, pid uint32, data []byte) (*IMsg, error) {
+	return NewWithFD(typ, peerID, pid, data, -1)
+}
+
+// NewWithFD will create an IMsg with a file descriptor. When a PID of 0 is provided, the PID will
+// be replaced with the result of os.Getpid(). If the ancillary data is too large, ErrLength will
+// be returned. Set fd to -1 to indicate no file descriptor should be passed.
+func NewWithFD(typ, peerID, pid uint32, data []byte, fd int) (*IMsg, error) {
 	if len(data) > MaxDataSizeInBytes {
 		return nil, ErrLength
 	}
@@ -47,6 +60,7 @@ func New(typ, peerID, pid uint32, data []byte) (*IMsg, error) {
 		Type:   typ,
 		PeerID: peerID,
 		PID:    pid,
+		FD:     fd,
 	}
 	if pid == 0 {
 		im.PID = uint32(os.Getpid())
@@ -233,4 +247,164 @@ var headerBufferPool = sync.Pool{
 	New: func() interface{} {
 		return new(headerBuffer)
 	},
+}
+
+// A UnixEncoder writes imsgs with file descriptor passing support to a Unix domain socket.
+type UnixEncoder struct {
+	conn *net.UnixConn
+	bo   binary.ByteOrder
+}
+
+// NewUnixEncoder returns a new Unix encoder that writes to the provided Unix domain socket
+// in the current system's byte order. This encoder supports file descriptor passing via
+// SCM_RIGHTS control messages.
+func NewUnixEncoder(conn *net.UnixConn) *UnixEncoder {
+	return NewUnixEncoderWithByteOrder(conn, binary.NativeEndian)
+}
+
+// NewUnixEncoderWithByteOrder returns a new Unix encoder that writes to the provided Unix
+// domain socket in the specified byte order.
+func NewUnixEncoderWithByteOrder(conn *net.UnixConn, byteOrder binary.ByteOrder) *UnixEncoder {
+	return &UnixEncoder{
+		conn: conn,
+		bo:   byteOrder,
+	}
+}
+
+// Encode writes the byte representation of the provided IMsg to the Unix domain socket,
+// including any attached file descriptor via SCM_RIGHTS. ErrLength is returned if the
+// resulting imsg would exceed the maximum allowed size. Providing a nil IMsg results in
+// a NOOP with nothing written and a nil error returned.
+func (enc *UnixEncoder) Encode(im *IMsg) error {
+	if im == nil {
+		return nil
+	}
+
+	wireSize := len(im.Data) + HeaderSizeInBytes
+	if wireSize > MaxSizeInBytes {
+		return ErrLength
+	}
+
+	// Build the message header
+	hdr := headerBufferPool.Get().(*headerBuffer)
+	defer headerBufferPool.Put(hdr)
+
+	length := uint32(wireSize)
+	if im.FD >= 0 {
+		length |= imsgFDMark
+	}
+
+	enc.bo.PutUint32(hdr[0:], im.Type)
+	enc.bo.PutUint32(hdr[4:], length)
+	enc.bo.PutUint32(hdr[8:], im.PeerID)
+	enc.bo.PutUint32(hdr[12:], im.PID)
+
+	// Build the complete message
+	msg := make([]byte, wireSize)
+	copy(msg[0:], hdr[:])
+	copy(msg[HeaderSizeInBytes:], im.Data)
+
+	// Send with or without FD
+	if im.FD >= 0 {
+		// Send with file descriptor using SCM_RIGHTS
+		oob := unix.UnixRights(im.FD)
+		_, _, err := enc.conn.WriteMsgUnix(msg, oob, nil)
+		return err
+	}
+
+	// Send without file descriptor
+	_, err := enc.conn.Write(msg)
+	return err
+}
+
+// A UnixDecoder reads and decodes IMsgs with file descriptor passing support from a Unix
+// domain socket.
+type UnixDecoder struct {
+	conn *net.UnixConn
+	bo   binary.ByteOrder
+}
+
+// NewUnixDecoder returns a new Unix decoder that reads from the provided Unix domain socket
+// in the current system's byte order. This decoder supports receiving file descriptors via
+// SCM_RIGHTS control messages.
+func NewUnixDecoder(conn *net.UnixConn) *UnixDecoder {
+	return NewUnixDecoderWithByteOrder(conn, binary.NativeEndian)
+}
+
+// NewUnixDecoderWithByteOrder returns a new Unix decoder that reads from the provided Unix
+// domain socket in the specified byte order.
+func NewUnixDecoderWithByteOrder(conn *net.UnixConn, byteOrder binary.ByteOrder) *UnixDecoder {
+	return &UnixDecoder{
+		conn: conn,
+		bo:   byteOrder,
+	}
+}
+
+// Decode reads the next IMsg from the Unix domain socket and stores it in the value pointed
+// to by im. ErrLength is returned if the imsg's size is greater than the maximum allowed size.
+// If a file descriptor is passed with the message, it will be stored in im.FD. Otherwise,
+// im.FD will be set to -1.
+func (dec *UnixDecoder) Decode(im *IMsg) error {
+	// Read header first to determine message size
+	hdr := headerBufferPool.Get().(*headerBuffer)
+	defer headerBufferPool.Put(hdr)
+
+	// Prepare to receive control messages (for FD passing)
+	oob := make([]byte, unix.CmsgSpace(4)) // Space for one int (file descriptor)
+	buf := make([]byte, MaxSizeInBytes)
+
+	n, oobn, _, _, err := dec.conn.ReadMsgUnix(buf, oob)
+	if err != nil {
+		return err
+	}
+
+	if n < HeaderSizeInBytes {
+		return ErrLength
+	}
+
+	// Parse header
+	copy(hdr[:], buf[0:HeaderSizeInBytes])
+
+	im.Type = dec.bo.Uint32(hdr[0:])
+	length := dec.bo.Uint32(hdr[4:])
+	im.PeerID = dec.bo.Uint32(hdr[8:])
+	im.PID = dec.bo.Uint32(hdr[12:])
+
+	// Check for FD mark and extract actual wire size
+	hasFD := (length & imsgFDMark) != 0
+	wireSize := int(length &^ imsgFDMark)
+
+	if wireSize > MaxSizeInBytes {
+		return ErrLength
+	}
+
+	if wireSize > n {
+		return ErrLength
+	}
+
+	// Extract file descriptor if present
+	im.FD = -1
+	if hasFD && oobn > 0 {
+		scms, err := unix.ParseSocketControlMessage(oob[:oobn])
+		if err == nil && len(scms) > 0 {
+			fds, err := unix.ParseUnixRights(&scms[0])
+			if err == nil && len(fds) > 0 {
+				im.FD = fds[0]
+				// Close any extra FDs we don't need
+				for i := 1; i < len(fds); i++ {
+					unix.Close(fds[i])
+				}
+			}
+		}
+	}
+
+	// Extract data
+	if wireSize > HeaderSizeInBytes {
+		im.Data = make([]byte, wireSize-HeaderSizeInBytes)
+		copy(im.Data, buf[HeaderSizeInBytes:wireSize])
+	} else {
+		im.Data = nil
+	}
+
+	return nil
 }
