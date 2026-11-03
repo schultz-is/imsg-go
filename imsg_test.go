@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 func TestNew(t *testing.T) {
@@ -582,6 +583,113 @@ func TestDecode(t *testing.T) {
 				}
 			},
 		)
+	}
+}
+
+func TestDecodeFragmentedStream(t *testing.T) {
+	messages := []IMsg{
+		{Type: 1234, PeerID: 888, PID: 61804, Data: []byte("Howdy y'all!")},
+		{Type: 25, PID: 61804},
+		{Type: 5678, PeerID: 999, PID: 61805, Data: []byte("Goodbye!")},
+	}
+
+	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		t.Run(bo.String(), func(t *testing.T) {
+			var stream []byte
+			for _, im := range messages {
+				b, err := im.MarshalBinaryWithByteOrder(bo)
+				if err != nil {
+					t.Fatal(err)
+				}
+				stream = append(stream, b...)
+			}
+
+			readers := []struct {
+				name string
+				r    io.Reader
+			}{
+				{
+					name: "fragmented header",
+					r:    io.MultiReader(bytes.NewReader(stream[:8]), bytes.NewReader(stream[8:])),
+				},
+				{
+					name: "fragmented payload",
+					r:    io.MultiReader(bytes.NewReader(stream[:HeaderSizeInBytes+1]), bytes.NewReader(stream[HeaderSizeInBytes+1:])),
+				},
+				{
+					name: "one byte at a time",
+					r:    iotest.OneByteReader(bytes.NewReader(stream)),
+				},
+				{
+					name: "data with EOF",
+					r:    iotest.DataErrReader(bytes.NewReader(stream)),
+				},
+			}
+
+			for _, test := range readers {
+				t.Run(test.name, func(t *testing.T) {
+					dec := NewDecoderWithByteOrder(test.r, bo)
+					for i, want := range messages {
+						var got IMsg
+						if err := dec.Decode(&got); err != nil {
+							t.Fatalf("Decode() message %d unexpected error: %v", i, err)
+						}
+						if !reflect.DeepEqual(got, want) {
+							t.Fatalf("Decode() message %d got %#v, want %#v", i, got, want)
+						}
+					}
+
+					var extra IMsg
+					if err := dec.Decode(&extra); err != io.EOF {
+						t.Fatalf("Decode() after final message got %v, want EOF", err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestDecodeTruncatedInput(t *testing.T) {
+	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		b, err := (IMsg{Type: 1234, Data: []byte("Howdy y'all!")}).MarshalBinaryWithByteOrder(bo)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for n := 0; n < len(b); n++ {
+			t.Run(fmt.Sprintf("%s/%d bytes", bo, n), func(t *testing.T) {
+				wantErr := io.ErrUnexpectedEOF
+				if n == 0 || n == HeaderSizeInBytes {
+					wantErr = io.EOF
+				}
+
+				var got IMsg
+				err := NewDecoderWithByteOrder(bytes.NewReader(b[:n]), bo).Decode(&got)
+				if err != wantErr {
+					t.Fatalf("Decode() got error %v, want %v", err, wantErr)
+				}
+			})
+		}
+	}
+}
+
+func TestDecodeReadError(t *testing.T) {
+	wantErr := errors.New("read failed")
+	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		b, err := (IMsg{Type: 1234, Data: []byte("Howdy y'all!")}).MarshalBinaryWithByteOrder(bo)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, n := range []int{0, 8, HeaderSizeInBytes, HeaderSizeInBytes + 1} {
+			t.Run(fmt.Sprintf("%s/%d bytes", bo, n), func(t *testing.T) {
+				r := io.MultiReader(bytes.NewReader(b[:n]), iotest.ErrReader(wantErr))
+				var got IMsg
+				if err := NewDecoderWithByteOrder(r, bo).Decode(&got); !errors.Is(err, wantErr) {
+					t.Fatalf("Decode() got error %v, want %v", err, wantErr)
+				}
+			})
+		}
 	}
 }
 
