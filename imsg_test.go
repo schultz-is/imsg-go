@@ -656,7 +656,7 @@ func TestDecodeTruncatedInput(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		for n := 0; n < len(b); n++ {
+		for n := range b {
 			t.Run(fmt.Sprintf("%s/%d bytes", bo, n), func(t *testing.T) {
 				wantErr := io.ErrUnexpectedEOF
 				if n == 0 || n == HeaderSizeInBytes {
