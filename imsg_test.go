@@ -586,6 +586,37 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+func TestInvalidMessageLengths(t *testing.T) {
+	lengths := []uint16{0, 1, HeaderSizeInBytes - 1, MaxSizeInBytes + 1, ^uint16(0)}
+	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		for _, length := range lengths {
+			t.Run(fmt.Sprintf("%s/%d", bo, length), func(t *testing.T) {
+				b := make([]byte, HeaderSizeInBytes+1)
+				bo.PutUint16(b[4:], length)
+				b[HeaderSizeInBytes] = 0xff
+
+				t.Run("UnmarshalBinary", func(t *testing.T) {
+					var got IMsg
+					if err := got.UnmarshalBinaryWithByteOrder(bo, b); err != ErrLength {
+						t.Fatalf("UnmarshalBinaryWithByteOrder() got error %v, want %v", err, ErrLength)
+					}
+				})
+
+				t.Run("Decode", func(t *testing.T) {
+					r := bytes.NewReader(b)
+					var got IMsg
+					if err := NewDecoderWithByteOrder(r, bo).Decode(&got); err != ErrLength {
+						t.Fatalf("Decode() got error %v, want %v", err, ErrLength)
+					}
+					if r.Len() != 1 {
+						t.Fatalf("Decode() consumed data after the invalid header: %d bytes remain, want 1", r.Len())
+					}
+				})
+			})
+		}
+	}
+}
+
 func TestDecodeFragmentedStream(t *testing.T) {
 	messages := []IMsg{
 		{Type: 1234, PeerID: 888, PID: 61804, Data: []byte("Howdy y'all!")},
