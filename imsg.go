@@ -98,6 +98,8 @@ func (im *IMsg) UnmarshalBinary(b []byte) error {
 // may have a different byte order than the current system. Since imsgs are intended for
 // inter-process communication, most communication will occur on a single system and
 // UnmarshalBinary will suffice.
+// ErrLength is returned if the declared size is less than HeaderSizeInBytes, greater than
+// MaxSizeInBytes, or exceeds len(b).
 func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byte) error {
 	if len(b) < HeaderSizeInBytes {
 		return ErrLength
@@ -105,7 +107,7 @@ func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byt
 
 	im.Type = byteOrder.Uint32(b[0:])
 	length := int(byteOrder.Uint16(b[4:]))
-	if length > MaxSizeInBytes {
+	if length < HeaderSizeInBytes || length > MaxSizeInBytes {
 		return ErrLength
 	}
 	if length > len(b) {
@@ -193,7 +195,8 @@ func NewDecoderWithByteOrder(r io.Reader, byteOrder binary.ByteOrder) *Decoder {
 }
 
 // Decode reads the next IMsg from the input stream and stores it in the value pointed to by im.
-// ErrLength is returned if the imsg's size is greater than the maximum allowed size for an imsg.
+// ErrLength is returned if the total imsg size is less than HeaderSizeInBytes or greater than
+// MaxSizeInBytes.
 // An EOF partway through a header or payload is reported as io.ErrUnexpectedEOF.
 func (dec *Decoder) Decode(im *IMsg) error {
 	hdr := headerBufferPool.Get().(*headerBuffer)
@@ -203,7 +206,7 @@ func (dec *Decoder) Decode(im *IMsg) error {
 	}
 
 	wireSize := dec.bo.Uint16(hdr[4:])
-	if wireSize > MaxSizeInBytes {
+	if wireSize < HeaderSizeInBytes || wireSize > MaxSizeInBytes {
 		return ErrLength
 	}
 
