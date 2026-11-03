@@ -194,9 +194,10 @@ func NewDecoderWithByteOrder(r io.Reader, byteOrder binary.ByteOrder) *Decoder {
 
 // Decode reads the next IMsg from the input stream and stores it in the value pointed to by im.
 // ErrLength is returned if the imsg's size is greater than the maximum allowed size for an imsg.
+// An EOF partway through a header or payload is reported as io.ErrUnexpectedEOF.
 func (dec *Decoder) Decode(im *IMsg) error {
 	hdr := headerBufferPool.Get().(*headerBuffer)
-	_, err := dec.r.Read(hdr[:])
+	_, err := io.ReadFull(dec.r, hdr[:])
 	if err != nil {
 		return err
 	}
@@ -213,7 +214,7 @@ func (dec *Decoder) Decode(im *IMsg) error {
 
 	if wireSize-HeaderSizeInBytes > 0 {
 		data := make([]byte, wireSize-HeaderSizeInBytes)
-		_, err = dec.r.Read(data)
+		_, err = io.ReadFull(dec.r, data)
 		if err != nil {
 			return err
 		}
