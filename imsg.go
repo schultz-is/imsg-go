@@ -231,7 +231,7 @@ type headerBuffer [HeaderSizeInBytes]byte
 // headerBufferPool is a pool of fixed-size byte arrays which can be used during encoding and
 // decoding in order to alleviate garbage collector strain.
 var headerBufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(headerBuffer)
 	},
 }
