@@ -586,6 +586,32 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+func TestUnmarshalBinaryReuse(t *testing.T) {
+	messages := []IMsg{
+		{Type: 1234, PeerID: 888, PID: 61804, Data: []byte("Howdy y'all!")},
+		{Type: 25, PID: 61804},
+		{Type: 5678, PeerID: 999, PID: 61805, Data: []byte("Goodbye!")},
+	}
+
+	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		t.Run(bo.String(), func(t *testing.T) {
+			var got IMsg
+			for i, want := range messages {
+				b, err := want.MarshalBinaryWithByteOrder(bo)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := got.UnmarshalBinaryWithByteOrder(bo, b); err != nil {
+					t.Fatalf("UnmarshalBinaryWithByteOrder() message %d unexpected error: %v", i, err)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("UnmarshalBinaryWithByteOrder() message %d got %#v, want %#v", i, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestInvalidMessageLengths(t *testing.T) {
 	lengths := []uint16{0, 1, HeaderSizeInBytes - 1, MaxSizeInBytes + 1, ^uint16(0)}
 	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
@@ -660,8 +686,8 @@ func TestDecodeFragmentedStream(t *testing.T) {
 			for _, test := range readers {
 				t.Run(test.name, func(t *testing.T) {
 					dec := NewDecoderWithByteOrder(test.r, bo)
+					var got IMsg
 					for i, want := range messages {
-						var got IMsg
 						if err := dec.Decode(&got); err != nil {
 							t.Fatalf("Decode() message %d unexpected error: %v", i, err)
 						}
