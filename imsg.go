@@ -118,6 +118,8 @@ func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byt
 	if length > HeaderSizeInBytes {
 		im.Data = make([]byte, length-HeaderSizeInBytes)
 		_ = copy(im.Data, b[16:])
+	} else {
+		im.Data = nil
 	}
 
 	return nil
@@ -222,6 +224,8 @@ func (dec *Decoder) Decode(im *IMsg) error {
 			return err
 		}
 		im.Data = data
+	} else {
+		im.Data = nil
 	}
 
 	return nil
