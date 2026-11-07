@@ -19,12 +19,18 @@ const (
 	MaxSizeInBytes = 16384
 	// MaxDataSizeInBytes is the maximum allowed size of an imsg's ancillary data in bytes.
 	MaxDataSizeInBytes = MaxSizeInBytes - HeaderSizeInBytes
+
+	// OpenBSD reserves the high bit of the wire length for the file descriptor marker.
+	imsgFDMark uint32 = 0x80000000
 )
 
 var (
 	// ErrLength is returned any time the length of an imsg is outside of allowed or expected
 	// parameters. The exception is when this error would mask an underlying error (e.g. an EOF.)
 	ErrLength = errors.New("imsg: data is too long")
+	// ErrUnsupportedFD is returned when a message header indicates an accompanying file descriptor.
+	// File descriptor passing is not supported.
+	ErrUnsupportedFD = errors.New("imsg: file descriptor passing is not supported")
 )
 
 // An IMsg represents the contents of an imsg which are relevant to an application.
@@ -78,8 +84,7 @@ func (im IMsg) MarshalBinaryWithByteOrder(byteOrder binary.ByteOrder) ([]byte, e
 
 	b := make([]byte, wireSize)
 	byteOrder.PutUint32(b[0:], im.Type)
-	byteOrder.PutUint16(b[4:], uint16(wireSize))
-	byteOrder.PutUint16(b[6:], uint16(0))
+	byteOrder.PutUint32(b[4:], uint32(wireSize))
 	byteOrder.PutUint32(b[8:], im.PeerID)
 	byteOrder.PutUint32(b[12:], im.PID)
 	_ = copy(b[16:], im.Data)
@@ -100,15 +105,20 @@ func (im *IMsg) UnmarshalBinary(b []byte) error {
 // UnmarshalBinary will suffice.
 // ErrLength is returned if the declared size is less than HeaderSizeInBytes, greater than
 // MaxSizeInBytes, or exceeds len(b).
+// ErrUnsupportedFD is returned if the header indicates an accompanying file descriptor.
 func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byte) error {
 	if len(b) < HeaderSizeInBytes {
 		return ErrLength
 	}
 
 	im.Type = byteOrder.Uint32(b[0:])
-	length := int(byteOrder.Uint16(b[4:]))
+	rawLength := byteOrder.Uint32(b[4:])
+	length := int(rawLength &^ imsgFDMark)
 	if length < HeaderSizeInBytes || length > MaxSizeInBytes {
 		return ErrLength
+	}
+	if rawLength&imsgFDMark != 0 {
+		return ErrUnsupportedFD
 	}
 	if length > len(b) {
 		return ErrLength
@@ -162,8 +172,7 @@ func (enc *Encoder) Encode(im *IMsg) error {
 
 	hdr := headerBufferPool.Get().(*headerBuffer)
 	enc.bo.PutUint32(hdr[0:], im.Type)
-	enc.bo.PutUint16(hdr[4:], uint16(wireSize))
-	enc.bo.PutUint16(hdr[6:], uint16(0))
+	enc.bo.PutUint32(hdr[4:], uint32(wireSize))
 	enc.bo.PutUint32(hdr[8:], im.PeerID)
 	enc.bo.PutUint32(hdr[12:], im.PID)
 	_, err := enc.w.Write(hdr[:])
@@ -199,6 +208,7 @@ func NewDecoderWithByteOrder(r io.Reader, byteOrder binary.ByteOrder) *Decoder {
 // Decode reads the next IMsg from the input stream and stores it in the value pointed to by im.
 // ErrLength is returned if the total imsg size is less than HeaderSizeInBytes or greater than
 // MaxSizeInBytes.
+// ErrUnsupportedFD is returned if the header indicates an accompanying file descriptor.
 // An EOF partway through a header or payload is reported as io.ErrUnexpectedEOF.
 func (dec *Decoder) Decode(im *IMsg) error {
 	hdr := headerBufferPool.Get().(*headerBuffer)
@@ -207,9 +217,13 @@ func (dec *Decoder) Decode(im *IMsg) error {
 		return err
 	}
 
-	wireSize := dec.bo.Uint16(hdr[4:])
+	rawLength := dec.bo.Uint32(hdr[4:])
+	wireSize := rawLength &^ imsgFDMark
 	if wireSize < HeaderSizeInBytes || wireSize > MaxSizeInBytes {
 		return ErrLength
+	}
+	if rawLength&imsgFDMark != 0 {
+		return ErrUnsupportedFD
 	}
 
 	im.Type = dec.bo.Uint32(hdr[0:])
