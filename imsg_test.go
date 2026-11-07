@@ -96,7 +96,7 @@ func TestMarshalBinary(t *testing.T) {
 			name:   "empty imsg",
 			in:     IMsg{},
 			wantLE: "00000000100000000000000000000000",
-			wantBE: "00000000001000000000000000000000",
+			wantBE: "00000000000000100000000000000000",
 		},
 		{
 			name: "vmctl get status",
@@ -105,7 +105,7 @@ func TestMarshalBinary(t *testing.T) {
 				PID:  61804,
 			},
 			wantLE: "1900000010000000000000006cf10000",
-			wantBE: "0000001900100000000000000000f16c",
+			wantBE: "0000001900000010000000000000f16c",
 		},
 		{
 			name: "max-valued fields",
@@ -116,7 +116,7 @@ func TestMarshalBinary(t *testing.T) {
 				Data:   make([]byte, MaxDataSizeInBytes),
 			},
 			wantLE: fmt.Sprintf("ffffffff00400000ffffffffffffffff%x", make([]byte, MaxDataSizeInBytes)),
-			wantBE: fmt.Sprintf("ffffffff40000000ffffffffffffffff%x", make([]byte, MaxDataSizeInBytes)),
+			wantBE: fmt.Sprintf("ffffffff00004000ffffffffffffffff%x", make([]byte, MaxDataSizeInBytes)),
 		},
 		{
 			name: "ancillary data",
@@ -127,7 +127,7 @@ func TestMarshalBinary(t *testing.T) {
 				Data:   []byte("Howdy y'all!"),
 			},
 			wantLE: "d20400001c000000780300006cf10000486f776479207927616c6c21",
-			wantBE: "000004d2001c0000000003780000f16c486f776479207927616c6c21",
+			wantBE: "000004d20000001c000003780000f16c486f776479207927616c6c21",
 		},
 	}
 
@@ -188,13 +188,13 @@ func TestUnmarshalBinary(t *testing.T) {
 		{
 			name: "empty imsg",
 			inLE: mustDecodeHexString(t, "00000000100000000000000000000000"),
-			inBE: mustDecodeHexString(t, "00000000001000000000000000000000"),
+			inBE: mustDecodeHexString(t, "00000000000000100000000000000000"),
 			want: IMsg{},
 		},
 		{
 			name: "vmctl get status",
 			inLE: mustDecodeHexString(t, "1900000010000000000000006cf10000"),
-			inBE: mustDecodeHexString(t, "0000001900100000000000000000f16c"),
+			inBE: mustDecodeHexString(t, "0000001900000010000000000000f16c"),
 			want: IMsg{
 				Type: 25,
 				PID:  61804,
@@ -203,7 +203,7 @@ func TestUnmarshalBinary(t *testing.T) {
 		{
 			name: "max-valued fields",
 			inLE: mustDecodeHexString(t, "ffffffff00400000ffffffffffffffff"+strings.Repeat("00", MaxDataSizeInBytes)),
-			inBE: mustDecodeHexString(t, "ffffffff40000000ffffffffffffffff"+strings.Repeat("00", MaxDataSizeInBytes)),
+			inBE: mustDecodeHexString(t, "ffffffff00004000ffffffffffffffff"+strings.Repeat("00", MaxDataSizeInBytes)),
 			want: IMsg{
 				Type:   ^uint32(0),
 				PeerID: ^uint32(0),
@@ -214,7 +214,7 @@ func TestUnmarshalBinary(t *testing.T) {
 		{
 			name: "ancillary data",
 			inLE: mustDecodeHexString(t, "d20400001c000000780300006cf10000486f776479207927616c6c21"),
-			inBE: mustDecodeHexString(t, "000004d2001c0000000003780000f16c486f776479207927616c6c21"),
+			inBE: mustDecodeHexString(t, "000004d20000001c000003780000f16c486f776479207927616c6c21"),
 			want: IMsg{
 				Type:   1234,
 				PeerID: 888,
@@ -223,15 +223,9 @@ func TestUnmarshalBinary(t *testing.T) {
 			},
 		},
 		{
-			name: "flags are ignored",
-			inLE: mustDecodeHexString(t, "000000001000beef0000000000000000"),
-			inBE: mustDecodeHexString(t, "000000000010beef0000000000000000"),
-			want: IMsg{},
-		},
-		{
 			name: "trailing data is ignored",
 			inLE: mustDecodeHexString(t, "d204000015000000780300006cf10000486f776479207927616c6c21"),
-			inBE: mustDecodeHexString(t, "000004d200150000000003780000f16c486f776479207927616c6c21"),
+			inBE: mustDecodeHexString(t, "000004d200000015000003780000f16c486f776479207927616c6c21"),
 			want: IMsg{
 				Type:   1234,
 				PeerID: 888,
@@ -295,7 +289,7 @@ func TestUnmarshalBinary(t *testing.T) {
 		},
 		{
 			name:      "data length mismatch",
-			in:        mustDecodeHexString(t, "ffffffff1100beef0000000000000000"),
+			in:        mustDecodeHexString(t, "ffffffff110000000000000000000000"),
 			wantError: ErrLength,
 		},
 	}
@@ -336,7 +330,7 @@ func TestEncode(t *testing.T) {
 			name:   "empty imsg",
 			in:     &IMsg{},
 			wantLE: "00000000100000000000000000000000",
-			wantBE: "00000000001000000000000000000000",
+			wantBE: "00000000000000100000000000000000",
 		},
 		{
 			name: "vmctl get status",
@@ -345,7 +339,7 @@ func TestEncode(t *testing.T) {
 				PID:  61804,
 			},
 			wantLE: "1900000010000000000000006cf10000",
-			wantBE: "0000001900100000000000000000f16c",
+			wantBE: "0000001900000010000000000000f16c",
 		},
 		{
 			name: "max-valued fields",
@@ -356,7 +350,7 @@ func TestEncode(t *testing.T) {
 				Data:   make([]byte, MaxDataSizeInBytes),
 			},
 			wantLE: fmt.Sprintf("ffffffff00400000ffffffffffffffff%x", make([]byte, MaxDataSizeInBytes)),
-			wantBE: fmt.Sprintf("ffffffff40000000ffffffffffffffff%x", make([]byte, MaxDataSizeInBytes)),
+			wantBE: fmt.Sprintf("ffffffff00004000ffffffffffffffff%x", make([]byte, MaxDataSizeInBytes)),
 		},
 		{
 			name: "ancillary data",
@@ -367,7 +361,7 @@ func TestEncode(t *testing.T) {
 				Data:   []byte("Howdy y'all!"),
 			},
 			wantLE: "d20400001c000000780300006cf10000486f776479207927616c6c21",
-			wantBE: "000004d2001c0000000003780000f16c486f776479207927616c6c21",
+			wantBE: "000004d20000001c000003780000f16c486f776479207927616c6c21",
 		},
 	}
 
@@ -455,13 +449,13 @@ func TestDecode(t *testing.T) {
 		{
 			name: "empty imsg",
 			inLE: mustDecodeHexString(t, "00000000100000000000000000000000"),
-			inBE: mustDecodeHexString(t, "00000000001000000000000000000000"),
+			inBE: mustDecodeHexString(t, "00000000000000100000000000000000"),
 			want: IMsg{},
 		},
 		{
 			name: "vmctl get status",
 			inLE: mustDecodeHexString(t, "1900000010000000000000006cf10000"),
-			inBE: mustDecodeHexString(t, "0000001900100000000000000000f16c"),
+			inBE: mustDecodeHexString(t, "0000001900000010000000000000f16c"),
 			want: IMsg{
 				Type: 25,
 				PID:  61804,
@@ -470,7 +464,7 @@ func TestDecode(t *testing.T) {
 		{
 			name: "max-valued fields",
 			inLE: mustDecodeHexString(t, "ffffffff00400000ffffffffffffffff"+strings.Repeat("00", MaxDataSizeInBytes)),
-			inBE: mustDecodeHexString(t, "ffffffff40000000ffffffffffffffff"+strings.Repeat("00", MaxDataSizeInBytes)),
+			inBE: mustDecodeHexString(t, "ffffffff00004000ffffffffffffffff"+strings.Repeat("00", MaxDataSizeInBytes)),
 			want: IMsg{
 				Type:   ^uint32(0),
 				PeerID: ^uint32(0),
@@ -481,7 +475,7 @@ func TestDecode(t *testing.T) {
 		{
 			name: "ancillary data",
 			inLE: mustDecodeHexString(t, "d20400001c000000780300006cf10000486f776479207927616c6c21"),
-			inBE: mustDecodeHexString(t, "000004d2001c0000000003780000f16c486f776479207927616c6c21"),
+			inBE: mustDecodeHexString(t, "000004d20000001c000003780000f16c486f776479207927616c6c21"),
 			want: IMsg{
 				Type:   1234,
 				PeerID: 888,
@@ -490,15 +484,9 @@ func TestDecode(t *testing.T) {
 			},
 		},
 		{
-			name: "flags are ignored",
-			inLE: mustDecodeHexString(t, "000000001000beef0000000000000000"),
-			inBE: mustDecodeHexString(t, "000000000010beef0000000000000000"),
-			want: IMsg{},
-		},
-		{
 			name: "trailing data is ignored",
 			inLE: mustDecodeHexString(t, "d204000015000000780300006cf10000486f776479207927616c6c21"),
-			inBE: mustDecodeHexString(t, "000004d200150000000003780000f16c486f776479207927616c6c21"),
+			inBE: mustDecodeHexString(t, "000004d200000015000003780000f16c486f776479207927616c6c21"),
 			want: IMsg{
 				Type:   1234,
 				PeerID: 888,
@@ -562,7 +550,7 @@ func TestDecode(t *testing.T) {
 		},
 		{
 			name:      "data length mismatch",
-			in:        mustDecodeHexString(t, "ffffffff1100beef0000000000000000"),
+			in:        mustDecodeHexString(t, "ffffffff110000000000000000000000"),
 			wantError: io.EOF,
 		},
 	}
@@ -573,7 +561,7 @@ func TestDecode(t *testing.T) {
 			func(t *testing.T) {
 				var out IMsg
 
-				err := NewDecoder(bytes.NewReader(test.in)).Decode(&out)
+				err := NewDecoderWithByteOrder(bytes.NewReader(test.in), binary.LittleEndian).Decode(&out)
 				if err == nil {
 					t.Fatal("Decode() unexpected success")
 				}
@@ -613,12 +601,12 @@ func TestUnmarshalBinaryReuse(t *testing.T) {
 }
 
 func TestInvalidMessageLengths(t *testing.T) {
-	lengths := []uint16{0, 1, HeaderSizeInBytes - 1, MaxSizeInBytes + 1, ^uint16(0)}
+	lengths := []uint32{0, 1, HeaderSizeInBytes - 1, MaxSizeInBytes + 1, 0xffff, 0x10010, 0x40000010, 0x7fffffff, 0x80000000, 0x80004001, 0xffffffff}
 	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		for _, length := range lengths {
 			t.Run(fmt.Sprintf("%s/%d", bo, length), func(t *testing.T) {
 				b := make([]byte, HeaderSizeInBytes+1)
-				bo.PutUint16(b[4:], length)
+				bo.PutUint32(b[4:], length)
 				b[HeaderSizeInBytes] = 0xff
 
 				t.Run("UnmarshalBinary", func(t *testing.T) {
@@ -636,6 +624,35 @@ func TestInvalidMessageLengths(t *testing.T) {
 					}
 					if r.Len() != 1 {
 						t.Fatalf("Decode() consumed data after the invalid header: %d bytes remain, want 1", r.Len())
+					}
+				})
+			})
+		}
+	}
+}
+
+func TestFileDescriptorMessages(t *testing.T) {
+	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		for _, length := range []uint32{HeaderSizeInBytes, HeaderSizeInBytes + 1, MaxSizeInBytes} {
+			t.Run(fmt.Sprintf("%s/%d", bo, length), func(t *testing.T) {
+				b := make([]byte, length)
+				bo.PutUint32(b[4:], length|0x80000000)
+
+				t.Run("UnmarshalBinary", func(t *testing.T) {
+					var got IMsg
+					if err := got.UnmarshalBinaryWithByteOrder(bo, b); err != ErrUnsupportedFD {
+						t.Fatalf("UnmarshalBinaryWithByteOrder() got error %v, want %v", err, ErrUnsupportedFD)
+					}
+				})
+
+				t.Run("Decode", func(t *testing.T) {
+					r := bytes.NewReader(b)
+					var got IMsg
+					if err := NewDecoderWithByteOrder(r, bo).Decode(&got); err != ErrUnsupportedFD {
+						t.Fatalf("Decode() got error %v, want %v", err, ErrUnsupportedFD)
+					}
+					if want := len(b) - HeaderSizeInBytes; r.Len() != want {
+						t.Fatalf("Decode() consumed payload bytes: %d bytes remain, want %d", r.Len(), want)
 					}
 				})
 			})
