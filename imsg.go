@@ -94,6 +94,7 @@ func (im IMsg) MarshalBinaryWithByteOrder(byteOrder binary.ByteOrder) ([]byte, e
 
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface. It returns an IMsg derived
 // from a byte-formatted imsg in the current system's byte order.
+// If an error is returned, im is left unchanged.
 func (im *IMsg) UnmarshalBinary(b []byte) error {
 	return im.UnmarshalBinaryWithByteOrder(binary.NativeEndian, b)
 }
@@ -106,12 +107,12 @@ func (im *IMsg) UnmarshalBinary(b []byte) error {
 // ErrLength is returned if the declared size is less than HeaderSizeInBytes, greater than
 // MaxSizeInBytes, or exceeds len(b).
 // ErrUnsupportedFD is returned if the header indicates an accompanying file descriptor.
+// If an error is returned, im is left unchanged.
 func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byte) error {
 	if len(b) < HeaderSizeInBytes {
 		return ErrLength
 	}
 
-	im.Type = byteOrder.Uint32(b[0:])
 	rawLength := byteOrder.Uint32(b[4:])
 	length := int(rawLength &^ imsgFDMark)
 	if length < HeaderSizeInBytes || length > MaxSizeInBytes {
@@ -123,13 +124,16 @@ func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byt
 	if length > len(b) {
 		return ErrLength
 	}
-	im.PeerID = byteOrder.Uint32(b[8:])
-	im.PID = byteOrder.Uint32(b[12:])
+	var data []byte
 	if length > HeaderSizeInBytes {
-		im.Data = make([]byte, length-HeaderSizeInBytes)
-		_ = copy(im.Data, b[16:])
-	} else {
-		im.Data = nil
+		data = make([]byte, length-HeaderSizeInBytes)
+		_ = copy(data, b[16:])
+	}
+	*im = IMsg{
+		Type:   byteOrder.Uint32(b[0:]),
+		PeerID: byteOrder.Uint32(b[8:]),
+		PID:    byteOrder.Uint32(b[12:]),
+		Data:   data,
 	}
 
 	return nil
@@ -212,6 +216,7 @@ func NewDecoderWithByteOrder(r io.Reader, byteOrder binary.ByteOrder) *Decoder {
 // ErrUnsupportedFD is returned if the header indicates an accompanying file descriptor.
 // An EOF before any bytes of a new message are read is reported as io.EOF.
 // An EOF after a message has started is reported as io.ErrUnexpectedEOF.
+// If an error is returned, im is left unchanged.
 func (dec *Decoder) Decode(im *IMsg) error {
 	hdr := headerBufferPool.Get().(*headerBuffer)
 	defer headerBufferPool.Put(hdr)
@@ -230,12 +235,9 @@ func (dec *Decoder) Decode(im *IMsg) error {
 		return ErrUnsupportedFD
 	}
 
-	im.Type = dec.bo.Uint32(hdr[0:])
-	im.PeerID = dec.bo.Uint32(hdr[8:])
-	im.PID = dec.bo.Uint32(hdr[12:])
-
+	var data []byte
 	if wireSize-HeaderSizeInBytes > 0 {
-		data := make([]byte, wireSize-HeaderSizeInBytes)
+		data = make([]byte, wireSize-HeaderSizeInBytes)
 		_, err = io.ReadFull(dec.r, data)
 		if err == io.EOF {
 			return io.ErrUnexpectedEOF
@@ -243,9 +245,12 @@ func (dec *Decoder) Decode(im *IMsg) error {
 		if err != nil {
 			return err
 		}
-		im.Data = data
-	} else {
-		im.Data = nil
+	}
+	*im = IMsg{
+		Type:   dec.bo.Uint32(hdr[0:]),
+		PeerID: dec.bo.Uint32(hdr[8:]),
+		PID:    dec.bo.Uint32(hdr[12:]),
+		Data:   data,
 	}
 
 	return nil
