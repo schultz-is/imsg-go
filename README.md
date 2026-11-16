@@ -6,5 +6,10 @@ stream-oriented Unix domain socket. Examples of imsg usage can be found in sever
 including OpenBSD's [vmm](https://man.openbsd.org/vmm)/[vmd](https://man.openbsd.org/vmd)/[vmctl](https://man.openbsd.org/vmctl),
 [OpenBGPD](https://www.openbgpd.org/), and [tmux](https://github.com/tmux/tmux).
 
+## Compatibility
+
+This package uses OpenBSD's current imsg header format with a 32-bit length field.
+File descriptor passing is not supported.
+
 ## Stability
 This package is pre-v1 and as such, currently provides no stability guarantees. Go 1.26 and above are supported.
