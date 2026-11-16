@@ -132,9 +132,9 @@ func TestMarshalBinary(t *testing.T) {
 	}
 
 	for _, test := range validIMsgs {
-		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian, binary.NativeEndian} {
 			t.Run(
-				test.name,
+				test.name+"/"+bo.String(),
 				func(t *testing.T) {
 					var out []byte
 					var err error
@@ -149,7 +149,7 @@ func TestMarshalBinary(t *testing.T) {
 					}
 
 					var want string
-					if bo == binary.LittleEndian {
+					if bo.Uint16([]byte{1, 0}) == 1 {
 						want = test.wantLE
 					} else {
 						want = test.wantBE
@@ -236,15 +236,15 @@ func TestUnmarshalBinary(t *testing.T) {
 	}
 
 	for _, test := range validIMsgs {
-		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian, binary.NativeEndian} {
 			t.Run(
-				test.name,
+				test.name+"/"+bo.String(),
 				func(t *testing.T) {
 					var in []byte
 					var out IMsg
 					var err error
 
-					if bo == binary.LittleEndian {
+					if bo.Uint16([]byte{1, 0}) == 1 {
 						in = test.inLE
 					} else {
 						in = test.inBE
@@ -366,9 +366,9 @@ func TestEncode(t *testing.T) {
 	}
 
 	for _, test := range validIMsgs {
-		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian, binary.NativeEndian} {
 			t.Run(
-				test.name,
+				test.name+"/"+bo.String(),
 				func(t *testing.T) {
 					var outBuf bytes.Buffer
 					var err error
@@ -383,7 +383,7 @@ func TestEncode(t *testing.T) {
 					}
 
 					var want string
-					if bo == binary.LittleEndian {
+					if bo.Uint16([]byte{1, 0}) == 1 {
 						want = test.wantLE
 					} else {
 						want = test.wantBE
@@ -497,15 +497,15 @@ func TestDecode(t *testing.T) {
 	}
 
 	for _, test := range validIMsgs {
-		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian, binary.NativeEndian} {
 			t.Run(
-				test.name,
+				test.name+"/"+bo.String(),
 				func(t *testing.T) {
 					var inR *bytes.Reader
 					var out IMsg
 					var err error
 
-					if bo == binary.LittleEndian {
+					if bo.Uint16([]byte{1, 0}) == 1 {
 						inR = bytes.NewReader(test.inLE)
 					} else {
 						inR = bytes.NewReader(test.inBE)
@@ -517,7 +517,7 @@ func TestDecode(t *testing.T) {
 						err = NewDecoderWithByteOrder(inR, bo).Decode(&out)
 					}
 					if err != nil {
-						t.Fatalf("Decode() (%) unexpected err: %s", bo, err)
+						t.Fatalf("Decode() (%s) unexpected err: %s", bo, err)
 					}
 
 					if !reflect.DeepEqual(out, test.want) {
