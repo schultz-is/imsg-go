@@ -171,6 +171,8 @@ func (enc *Encoder) Encode(im *IMsg) error {
 	}
 
 	hdr := headerBufferPool.Get().(*headerBuffer)
+	defer headerBufferPool.Put(hdr)
+
 	enc.bo.PutUint32(hdr[0:], im.Type)
 	enc.bo.PutUint32(hdr[4:], uint32(wireSize))
 	enc.bo.PutUint32(hdr[8:], im.PeerID)
@@ -179,7 +181,6 @@ func (enc *Encoder) Encode(im *IMsg) error {
 	if err != nil {
 		return err
 	}
-	headerBufferPool.Put(hdr)
 	_, err = enc.w.Write(im.Data)
 	return err
 }
@@ -212,6 +213,8 @@ func NewDecoderWithByteOrder(r io.Reader, byteOrder binary.ByteOrder) *Decoder {
 // An EOF partway through a header or payload is reported as io.ErrUnexpectedEOF.
 func (dec *Decoder) Decode(im *IMsg) error {
 	hdr := headerBufferPool.Get().(*headerBuffer)
+	defer headerBufferPool.Put(hdr)
+
 	_, err := io.ReadFull(dec.r, hdr[:])
 	if err != nil {
 		return err
@@ -229,7 +232,6 @@ func (dec *Decoder) Decode(im *IMsg) error {
 	im.Type = dec.bo.Uint32(hdr[0:])
 	im.PeerID = dec.bo.Uint32(hdr[8:])
 	im.PID = dec.bo.Uint32(hdr[12:])
-	headerBufferPool.Put(hdr)
 
 	if wireSize-HeaderSizeInBytes > 0 {
 		data := make([]byte, wireSize-HeaderSizeInBytes)
