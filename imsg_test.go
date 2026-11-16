@@ -551,7 +551,7 @@ func TestDecode(t *testing.T) {
 		{
 			name:      "data length mismatch",
 			in:        mustDecodeHexString(t, "ffffffff110000000000000000000000"),
-			wantError: io.EOF,
+			wantError: io.ErrUnexpectedEOF,
 		},
 	}
 
@@ -733,7 +733,7 @@ func TestDecodeTruncatedInput(t *testing.T) {
 		for n := range b {
 			t.Run(fmt.Sprintf("%s/%d bytes", bo, n), func(t *testing.T) {
 				wantErr := io.ErrUnexpectedEOF
-				if n == 0 || n == HeaderSizeInBytes {
+				if n == 0 {
 					wantErr = io.EOF
 				}
 
