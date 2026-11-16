@@ -298,7 +298,9 @@ func TestUnmarshalBinary(t *testing.T) {
 		t.Run(
 			test.name,
 			func(t *testing.T) {
-				var out IMsg
+				want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+				out := want
+				out.Data = bytes.Clone(want.Data)
 
 				err := out.UnmarshalBinaryWithByteOrder(binary.LittleEndian, test.in)
 				if err == nil {
@@ -307,6 +309,9 @@ func TestUnmarshalBinary(t *testing.T) {
 
 				if err != test.wantError {
 					t.Fatalf("UnmarshalBinary() incorrect error, got %s, want %s", err, test.wantError)
+				}
+				if !reflect.DeepEqual(out, want) {
+					t.Fatalf("UnmarshalBinary() modified message on error: got %#v, want %#v", out, want)
 				}
 			},
 		)
@@ -559,7 +564,9 @@ func TestDecode(t *testing.T) {
 		t.Run(
 			test.name,
 			func(t *testing.T) {
-				var out IMsg
+				want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+				out := want
+				out.Data = bytes.Clone(want.Data)
 
 				err := NewDecoderWithByteOrder(bytes.NewReader(test.in), binary.LittleEndian).Decode(&out)
 				if err == nil {
@@ -568,6 +575,9 @@ func TestDecode(t *testing.T) {
 
 				if err != test.wantError {
 					t.Fatalf("Decode() incorrect error, got %s, want %s", err, test.wantError)
+				}
+				if !reflect.DeepEqual(out, want) {
+					t.Fatalf("Decode() modified message on error: got %#v, want %#v", out, want)
 				}
 			},
 		)
@@ -610,17 +620,27 @@ func TestInvalidMessageLengths(t *testing.T) {
 				b[HeaderSizeInBytes] = 0xff
 
 				t.Run("UnmarshalBinary", func(t *testing.T) {
-					var got IMsg
+					want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+					got := want
+					got.Data = bytes.Clone(want.Data)
 					if err := got.UnmarshalBinaryWithByteOrder(bo, b); err != ErrLength {
 						t.Fatalf("UnmarshalBinaryWithByteOrder() got error %v, want %v", err, ErrLength)
+					}
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("UnmarshalBinaryWithByteOrder() modified message on error: got %#v, want %#v", got, want)
 					}
 				})
 
 				t.Run("Decode", func(t *testing.T) {
 					r := bytes.NewReader(b)
-					var got IMsg
+					want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+					got := want
+					got.Data = bytes.Clone(want.Data)
 					if err := NewDecoderWithByteOrder(r, bo).Decode(&got); err != ErrLength {
 						t.Fatalf("Decode() got error %v, want %v", err, ErrLength)
+					}
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("Decode() modified message on error: got %#v, want %#v", got, want)
 					}
 					if r.Len() != 1 {
 						t.Fatalf("Decode() consumed data after the invalid header: %d bytes remain, want 1", r.Len())
@@ -639,17 +659,27 @@ func TestFileDescriptorMessages(t *testing.T) {
 				bo.PutUint32(b[4:], length|0x80000000)
 
 				t.Run("UnmarshalBinary", func(t *testing.T) {
-					var got IMsg
+					want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+					got := want
+					got.Data = bytes.Clone(want.Data)
 					if err := got.UnmarshalBinaryWithByteOrder(bo, b); err != ErrUnsupportedFD {
 						t.Fatalf("UnmarshalBinaryWithByteOrder() got error %v, want %v", err, ErrUnsupportedFD)
+					}
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("UnmarshalBinaryWithByteOrder() modified message on error: got %#v, want %#v", got, want)
 					}
 				})
 
 				t.Run("Decode", func(t *testing.T) {
 					r := bytes.NewReader(b)
-					var got IMsg
+					want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+					got := want
+					got.Data = bytes.Clone(want.Data)
 					if err := NewDecoderWithByteOrder(r, bo).Decode(&got); err != ErrUnsupportedFD {
 						t.Fatalf("Decode() got error %v, want %v", err, ErrUnsupportedFD)
+					}
+					if !reflect.DeepEqual(got, want) {
+						t.Fatalf("Decode() modified message on error: got %#v, want %#v", got, want)
 					}
 					if want := len(b) - HeaderSizeInBytes; r.Len() != want {
 						t.Fatalf("Decode() consumed payload bytes: %d bytes remain, want %d", r.Len(), want)
@@ -737,10 +767,15 @@ func TestDecodeTruncatedInput(t *testing.T) {
 					wantErr = io.EOF
 				}
 
-				var got IMsg
+				want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+				got := want
+				got.Data = bytes.Clone(want.Data)
 				err := NewDecoderWithByteOrder(bytes.NewReader(b[:n]), bo).Decode(&got)
 				if err != wantErr {
 					t.Fatalf("Decode() got error %v, want %v", err, wantErr)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("Decode() modified message on error: got %#v, want %#v", got, want)
 				}
 			})
 		}
@@ -758,9 +793,14 @@ func TestDecodeReadError(t *testing.T) {
 		for _, n := range []int{0, 8, HeaderSizeInBytes, HeaderSizeInBytes + 1} {
 			t.Run(fmt.Sprintf("%s/%d bytes", bo, n), func(t *testing.T) {
 				r := io.MultiReader(bytes.NewReader(b[:n]), iotest.ErrReader(wantErr))
-				var got IMsg
+				want := IMsg{Type: 1, PeerID: 2, PID: 3, Data: []byte("previous")}
+				got := want
+				got.Data = bytes.Clone(want.Data)
 				if err := NewDecoderWithByteOrder(r, bo).Decode(&got); !errors.Is(err, wantErr) {
 					t.Fatalf("Decode() got error %v, want %v", err, wantErr)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("Decode() modified message on error: got %#v, want %#v", got, want)
 				}
 			})
 		}
