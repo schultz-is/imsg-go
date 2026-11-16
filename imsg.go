@@ -27,7 +27,7 @@ const (
 var (
 	// ErrLength is returned any time the length of an imsg is outside of allowed or expected
 	// parameters. The exception is when this error would mask an underlying error (e.g. an EOF.)
-	ErrLength = errors.New("imsg: data is too long")
+	ErrLength = errors.New("imsg: invalid message length")
 	// ErrUnsupportedFD is returned when a message header indicates an accompanying file descriptor.
 	// File descriptor passing is not supported.
 	ErrUnsupportedFD = errors.New("imsg: file descriptor passing is not supported")
