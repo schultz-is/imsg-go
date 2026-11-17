@@ -1,0 +1,95 @@
+name: Interoperability
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+
+permissions:
+  contents: read
+
+jobs:
+  tmux:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      CGO_ENABLED: "0"
+      IMSG_TMUX_DEBUG: "1"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+
+      - name: Install tmux on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+
+      - name: Install tmux on macOS
+        if: runner.os == 'macOS'
+        run: brew install --force-bottle tmux
+
+      - name: Report tmux version
+        run: tmux -V
+
+      - name: Use the checked-out library
+        working-directory: ${{ runner.temp }}
+        run: |
+          go work init "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/interop"
+          echo "GOWORK=$RUNNER_TEMP/go.work" >> "$GITHUB_ENV"
+
+      - name: Run interoperability tests
+        working-directory: interop
+        run: go test -v ./...
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: openbsd
+            goarch: amd64
+          - goos: openbsd
+            goarch: arm64
+          - goos: freebsd
+            goarch: amd64
+          - goos: netbsd
+            goarch: amd64
+          - goos: dragonfly
+            goarch: amd64
+          - goos: solaris
+            goarch: amd64
+          - goos: illumos
+            goarch: amd64
+          - goos: aix
+            goarch: ppc64
+          - goos: windows
+            goarch: amd64
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+
+      - name: Build library
+        run: go build ./...
