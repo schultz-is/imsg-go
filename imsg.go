@@ -29,7 +29,7 @@ var (
 	// parameters. The exception is when this error would mask an underlying error (e.g. an EOF.)
 	ErrLength = errors.New("imsg: invalid message length")
 	// ErrUnsupportedFD is returned when a message header indicates an accompanying file descriptor.
-	// File descriptor passing is not supported.
+	// These data-only APIs do not support file descriptor passing.
 	ErrUnsupportedFD = errors.New("imsg: file descriptor passing is not supported")
 )
 
