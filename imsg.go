@@ -2,6 +2,9 @@
 // Use of this source code is governed by an ISC license that can be found in the LICENSE file.
 
 // Package imsg provides tools for working with OpenBSD's imsg IPC library.
+//
+// On Unix systems, UnixEncoder and UnixDecoder support file descriptor passing
+// over Unix stream sockets.
 package imsg
 
 import (
@@ -28,8 +31,9 @@ var (
 	// ErrLength is returned any time the length of an imsg is outside of allowed or expected
 	// parameters. The exception is when this error would mask an underlying error (e.g. an EOF.)
 	ErrLength = errors.New("imsg: invalid message length")
-	// ErrUnsupportedFD is returned when a message header indicates an accompanying file descriptor.
-	// These data-only APIs do not support file descriptor passing.
+	// ErrUnsupportedFD is returned by binary unmarshalling and the generic Decoder
+	// when a header indicates an accompanying file descriptor. On Unix, use
+	// UnixDecoder to receive descriptors.
 	ErrUnsupportedFD = errors.New("imsg: file descriptor passing is not supported")
 )
 
