@@ -77,16 +77,13 @@ func (im IMsg) MarshalBinary() ([]byte, error) {
 // different byte order than the current system. Since imsgs are intended for inter-process
 // communication, most communication will occur on a single system and MarshalBinary will suffice.
 func (im IMsg) MarshalBinaryWithByteOrder(byteOrder binary.ByteOrder) ([]byte, error) {
-	wireSize := len(im.Data) + HeaderSizeInBytes
-	if wireSize > MaxSizeInBytes {
-		return nil, ErrLength
+	h, err := newHeader(im)
+	if err != nil {
+		return nil, err
 	}
 
-	b := make([]byte, wireSize)
-	byteOrder.PutUint32(b[0:], im.Type)
-	byteOrder.PutUint32(b[4:], uint32(wireSize))
-	byteOrder.PutUint32(b[8:], im.PeerID)
-	byteOrder.PutUint32(b[12:], im.PID)
+	b := make([]byte, h.wireSize())
+	h.marshal(byteOrder, b)
 	_ = copy(b[16:], im.Data)
 
 	return b, nil
@@ -109,18 +106,14 @@ func (im *IMsg) UnmarshalBinary(b []byte) error {
 // ErrUnsupportedFD is returned if the header indicates an accompanying file descriptor.
 // If an error is returned, im is left unchanged.
 func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byte) error {
-	if len(b) < HeaderSizeInBytes {
-		return ErrLength
+	h, err := parseHeader(byteOrder, b)
+	if err != nil {
+		return err
 	}
-
-	rawLength := byteOrder.Uint32(b[4:])
-	length := int(rawLength &^ imsgFDMark)
-	if length < HeaderSizeInBytes || length > MaxSizeInBytes {
-		return ErrLength
-	}
-	if rawLength&imsgFDMark != 0 {
+	if h.hasFD() {
 		return ErrUnsupportedFD
 	}
+	length := h.wireSize()
 	if length > len(b) {
 		return ErrLength
 	}
@@ -130,9 +123,9 @@ func (im *IMsg) UnmarshalBinaryWithByteOrder(byteOrder binary.ByteOrder, b []byt
 		_ = copy(data, b[16:])
 	}
 	*im = IMsg{
-		Type:   byteOrder.Uint32(b[0:]),
-		PeerID: byteOrder.Uint32(b[8:]),
-		PID:    byteOrder.Uint32(b[12:]),
+		Type:   h.typ,
+		PeerID: h.peerID,
+		PID:    h.pid,
 		Data:   data,
 	}
 
@@ -169,19 +162,16 @@ func (enc *Encoder) Encode(im *IMsg) error {
 		return nil
 	}
 
-	wireSize := len(im.Data) + HeaderSizeInBytes
-	if wireSize > MaxSizeInBytes {
-		return ErrLength
+	h, err := newHeader(*im)
+	if err != nil {
+		return err
 	}
 
 	hdr := headerBufferPool.Get().(*headerBuffer)
 	defer headerBufferPool.Put(hdr)
 
-	enc.bo.PutUint32(hdr[0:], im.Type)
-	enc.bo.PutUint32(hdr[4:], uint32(wireSize))
-	enc.bo.PutUint32(hdr[8:], im.PeerID)
-	enc.bo.PutUint32(hdr[12:], im.PID)
-	_, err := enc.w.Write(hdr[:])
+	h.marshal(enc.bo, hdr[:])
+	_, err = enc.w.Write(hdr[:])
 	if err != nil {
 		return err
 	}
@@ -226,15 +216,15 @@ func (dec *Decoder) Decode(im *IMsg) error {
 		return err
 	}
 
-	rawLength := dec.bo.Uint32(hdr[4:])
-	wireSize := rawLength &^ imsgFDMark
-	if wireSize < HeaderSizeInBytes || wireSize > MaxSizeInBytes {
-		return ErrLength
+	h, err := parseHeader(dec.bo, hdr[:])
+	if err != nil {
+		return err
 	}
-	if rawLength&imsgFDMark != 0 {
+	if h.hasFD() {
 		return ErrUnsupportedFD
 	}
 
+	wireSize := h.wireSize()
 	var data []byte
 	if wireSize-HeaderSizeInBytes > 0 {
 		data = make([]byte, wireSize-HeaderSizeInBytes)
@@ -247,9 +237,9 @@ func (dec *Decoder) Decode(im *IMsg) error {
 		}
 	}
 	*im = IMsg{
-		Type:   dec.bo.Uint32(hdr[0:]),
-		PeerID: dec.bo.Uint32(hdr[8:]),
-		PID:    dec.bo.Uint32(hdr[12:]),
+		Type:   h.typ,
+		PeerID: h.peerID,
+		PID:    h.pid,
 		Data:   data,
 	}
 
