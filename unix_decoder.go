@@ -103,9 +103,6 @@ func (dec *UnixDecoder) Decode(im *IMsg) (*os.File, error) {
 	var file *os.File
 	if len(fds) == 1 {
 		file = os.NewFile(uintptr(fds[0]), "imsg")
-		if file == nil {
-			return dec.fail(fmt.Errorf("%w: cannot wrap received descriptor", ErrFD))
-		}
 		fds = nil // Ownership passes to file and then to the caller.
 	}
 	*im = IMsg{Type: h.typ, PeerID: h.peerID, PID: h.pid, Data: data}
