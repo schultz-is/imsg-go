@@ -133,10 +133,7 @@ func (dec *UnixDecoder) readFull(b, oob []byte, fds *[]int) (int, error) {
 		if len(*fds) > 1 {
 			return total, fmt.Errorf("%w: received more than one descriptor", ErrFD)
 		}
-		if total == len(b) {
-			return total, nil
-		}
-		if err != nil {
+		if err != nil && total < len(b) {
 			return total, err
 		}
 		if n == 0 {

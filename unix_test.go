@@ -314,6 +314,33 @@ func TestUnixDecodeErrors(t *testing.T) {
 	}
 }
 
+func TestUnixDecodeCompleteRead(t *testing.T) {
+	for _, payload := range [][]byte{nil, []byte("payload")} {
+		for _, readErr := range []error{io.EOF, errors.New("read failed")} {
+			t.Run(fmt.Sprintf("%d bytes/%v", len(payload), readErr), func(t *testing.T) {
+				want := IMsg{Type: 1, Data: payload}
+				b, err := want.MarshalBinary()
+				if err != nil {
+					t.Fatal(err)
+				}
+				steps := []unixReadStep{{b: b[:HeaderSizeInBytes], err: readErr}}
+				if len(payload) > 0 {
+					steps[0].err = nil
+					steps = append(steps, unixReadStep{b: b[HeaderSizeInBytes:], err: readErr})
+				}
+				dec := &UnixDecoder{conn: &scriptedUnixReader{steps: steps}, bo: binary.NativeEndian}
+				var got IMsg
+				if file, err := dec.Decode(&got); file != nil || err != nil {
+					t.Fatalf("complete message got file %v, error %v", file, err)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("Decode() got %#v, want %#v", got, want)
+				}
+			})
+		}
+	}
+}
+
 type chunkUnixWriter struct {
 	b          bytes.Buffer
 	oobs       [][]byte
