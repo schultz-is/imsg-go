@@ -10,17 +10,26 @@ silently skipping them.
 
 ## Running locally
 
-From the repository root, create a temporary workspace so the harness uses your
-checkout instead of a published library version:
+Run the tests directly from this directory:
 
 ```sh
-workspace="$(mktemp -d)"
-go -C "$workspace" work init "$PWD" "$PWD/interop"
-GOWORK="$workspace/go.work" CGO_ENABLED=0 go -C interop test -v ./...
+go test -v ./...
 ```
 
-No `replace` directive or committed `go.work` file is needed. The temporary
-workspace can be removed when you finish.
+The workspace in `interop/go.work` automatically uses the parent library checkout
+instead of the published version required by `go.mod`. It applies only when running
+from this directory; the root library's module and test suite remain independent.
+No `replace` directive is needed. If `GOWORK` is explicitly set to `off` or another
+workspace, unset it to use this workspace.
+
+To collect coverage for the library exercised by these tests, select it explicitly:
+
+```sh
+go test -coverpkg=github.com/schultz-is/imsg-go -coverprofile=/tmp/coverage.out ./...
+```
+
+Without `-coverpkg`, Go measures only the interoperability module, which contains
+tests rather than library implementation code.
 
 Set `IMSG_TMUX_DEBUG=1` to enable tmux logging. On failure, the tests include the
 tails of those logs in their output.
