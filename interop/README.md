@@ -45,5 +45,6 @@ tails of those logs in their output.
   Sockets and logs use test-owned temporary directories. Cleanup signals only the
   processes started by the test; it never uses the default tmux socket.
 
-CI runs the harness on macOS and Ubuntu 26.04, installing prebuilt tmux packages.
+CI runs the library tests and harness together on macOS and Ubuntu 26.04, installing
+prebuilt tmux packages.
 These checks exercise portable imsg interoperability, not native OpenBSD execution.

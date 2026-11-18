@@ -75,10 +75,12 @@ The normal tests are pure Go and run on macOS and Linux:
 CGO_ENABLED=0 go test ./...
 ```
 
-Other Unix targets receive build checks; native OpenBSD runtime tests are not
-currently part of CI. The [nested interoperability module](https://github.com/schultz-is/imsg-go/tree/main/interop)
-tests against prebuilt tmux binaries in separate macOS/Linux CI jobs. It is excluded
-from the library's Go module ZIP and does not require C fixtures or VMs.
+CI tests the current Go version on macOS and Linux and the minimum Go version on
+Linux. It also cross-builds for OpenBSD/amd64; this is not native OpenBSD runtime
+testing. The [nested interoperability module](https://github.com/schultz-is/imsg-go/tree/main/interop)
+tests against prebuilt tmux binaries alongside the library tests in the macOS/Linux
+jobs. It is excluded from the library's Go module ZIP and does not require C
+fixtures or VMs.
 
 ## Stability
 This package is pre-v1 and as such, currently provides no stability guarantees. Go 1.26 and above are supported.
