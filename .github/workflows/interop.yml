@@ -1,0 +1,70 @@
+name: Unix tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+
+permissions:
+  contents: read
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      CGO_ENABLED: "0"
+      IMSG_TMUX_DEBUG: "1"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.27.x"
+
+      - name: Run library tests
+        run: go test -v ./...
+
+      - name: Install tmux on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+
+      - name: Install tmux on macOS
+        if: runner.os == 'macOS'
+        run: brew install --force-bottle tmux
+
+      - name: Report tmux version
+        run: tmux -V
+
+      - name: Run interoperability tests
+        working-directory: interop
+        run: go test -v ./...
+
+  openbsd:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+      GOOS: openbsd
+      GOARCH: amd64
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+
+      - name: Build library
+        run: go build ./...
