@@ -156,9 +156,10 @@ func parseRights(oob []byte) ([]int, error) {
 			// Parse complete integers before rejecting a malformed remainder,
 			// so those descriptors are still available for cleanup.
 			size := len(data) &^ 3
-			rights, err := unix.ParseUnixRights(&unix.SocketControlMessage{Header: h, Data: data[:size]})
+			// The level/type checks above satisfy ParseUnixRights' error checks.
+			rights, _ := unix.ParseUnixRights(&unix.SocketControlMessage{Header: h, Data: data[:size]})
 			fds = append(fds, rights...)
-			if err != nil || size == 0 || size != len(data) {
+			if size == 0 || size != len(data) {
 				return fds, fmt.Errorf("%w: malformed descriptor data", ErrFD)
 			}
 		}
