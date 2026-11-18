@@ -92,11 +92,12 @@ func (enc *UnixEncoder) Encode(im *IMsg, file *os.File) error {
 	return sendErr
 }
 
+// writeFrame sends a complete, validated imsg frame.
 func (enc *UnixEncoder) writeFrame(b, oob []byte) error {
 	for len(b) > 0 {
 		chunk := b
 		if len(oob) > 0 {
-			chunk = b[:min(len(b), HeaderSizeInBytes)]
+			chunk = b[:HeaderSizeInBytes]
 		}
 		n, oobn, err := enc.conn.WriteMsgUnix(chunk, oob, nil)
 		if err == nil && oobn != len(oob) {
